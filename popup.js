@@ -11,6 +11,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Função auxiliar para verificar se a aba é válida (não é chrome://, edge://, etc.)
+  function isAccessibleUrl(url) {
+    if (!url) return false;
+    // Bloqueia URLs internas do navegador
+    const blockedProtocols = ['chrome:', 'chrome-extension:', 'edge:', 'about:', 'data:', 'javascript:'];
+    return !blockedProtocols.some(protocol => url.startsWith(protocol));
+  }
+
   // Iniciar
   startBtn.addEventListener('click', async () => {
     const interval = parseInt(intervalInput.value, 10);
@@ -25,30 +33,46 @@ document.addEventListener('DOMContentLoaded', () => {
     // Obtém a aba ativa
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    // Envia mensagem para iniciar
+    // Verifica se a aba é acessível
+    if (!isAccessibleUrl(tab.url)) {
+      statusDiv.innerText = 'Erro: Não é possível usar autoclicker em páginas internas do navegador (chrome://, etc.)';
+      return;
+    }
+
     try {
+      // Tenta enviar mensagem para o content script (já injetado)
       await chrome.tabs.sendMessage(tab.id, { action: 'start', interval });
       statusDiv.innerText = 'Auto clicker ATIVO';
     } catch (error) {
-      // Se o content script não estiver carregado, injeta
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['content.js']
-      });
-      // Tenta novamente
-      await chrome.tabs.sendMessage(tab.id, { action: 'start', interval });
-      statusDiv.innerText = 'Auto clicker ATIVO';
+      // Se falhar, injeta o content script e tenta novamente
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        });
+        await chrome.tabs.sendMessage(tab.id, { action: 'start', interval });
+        statusDiv.innerText = 'Auto clicker ATIVO';
+      } catch (injectError) {
+        console.error(injectError);
+        statusDiv.innerText = 'Erro: Não foi possível iniciar. Recarregue a página e tente novamente.';
+      }
     }
   });
 
   // Parar
   stopBtn.addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    if (!isAccessibleUrl(tab.url)) {
+      statusDiv.innerText = 'Erro: Página interna não suportada.';
+      return;
+    }
+
     try {
       await chrome.tabs.sendMessage(tab.id, { action: 'stop' });
       statusDiv.innerText = 'Parado';
     } catch (error) {
-      statusDiv.innerText = 'Erro ao parar';
+      statusDiv.innerText = 'Erro ao parar. Recarregue a página se necessário.';
     }
   });
 });
