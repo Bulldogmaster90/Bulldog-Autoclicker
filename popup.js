@@ -2,74 +2,88 @@ document.addEventListener('DOMContentLoaded', () => {
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
   const intervalInput = document.getElementById('interval');
+  const multiplierInput = document.getElementById('multiplier');
   const statusDiv = document.getElementById('status');
 
-  // Carrega intervalo salvo
-  chrome.storage.local.get('clickInterval', (data) => {
-    if (data.clickInterval) {
-      intervalInput.value = data.clickInterval;
-    }
+  // Carrega configurações salvas
+  chrome.storage.local.get(['clickInterval', 'clickMultiplier'], (data) => {
+    if (data.clickInterval) intervalInput.value = data.clickInterval;
+    if (data.clickMultiplier) multiplierInput.value = data.clickMultiplier;
   });
 
-  // Função auxiliar para verificar se a aba é válida (não é chrome://, etc.)
   function isAccessibleUrl(url) {
     if (!url) return false;
-    const blockedProtocols = ['chrome:', 'chrome-extension:', 'edge:', 'about:', 'data:', 'javascript:'];
-    return !blockedProtocols.some(protocol => url.startsWith(protocol));
+    const blocked = ['chrome:', 'chrome-extension:', 'edge:', 'about:', 'data:', 'javascript:'];
+    return !blocked.some(p => url.startsWith(p));
   }
 
-  // Iniciar
   startBtn.addEventListener('click', async () => {
     const interval = parseInt(intervalInput.value, 10);
-    // Agora permite qualquer valor maior que 0
+    const multiplier = parseInt(multiplierInput.value, 10);
+
     if (isNaN(interval) || interval <= 0) {
-      statusDiv.innerText = 'Intervalo inválido (deve ser um número positivo)';
+      statusDiv.innerText = 'Intervalo inválido (positivo)';
+      return;
+    }
+    if (isNaN(multiplier) || multiplier < 1) {
+      statusDiv.innerText = 'Multiplicador deve ser >= 1';
       return;
     }
 
-    // Salva intervalo
-    chrome.storage.local.set({ clickInterval: interval });
+    // Salva configurações
+    chrome.storage.local.set({ clickInterval: interval, clickMultiplier: multiplier });
 
-    // Obtém a aba ativa
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-    if (!isAccessibleUrl(tab.url)) {
-      statusDiv.innerText = 'Erro: Página interna do navegador não suportada.';
-      return;
-    }
-
-    try {
-      await chrome.tabs.sendMessage(tab.id, { action: 'start', interval });
-      statusDiv.innerText = 'Auto clicker ATIVO';
-    } catch (error) {
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['content.js']
-        });
-        await chrome.tabs.sendMessage(tab.id, { action: 'start', interval });
-        statusDiv.innerText = 'Auto clicker ATIVO';
-      } catch (injectError) {
-        console.error(injectError);
-        statusDiv.innerText = 'Erro: Não foi possível iniciar. Recarregue a página e tente novamente.';
-      }
-    }
-  });
-
-  // Parar
-  stopBtn.addEventListener('click', async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
     if (!isAccessibleUrl(tab.url)) {
       statusDiv.innerText = 'Erro: Página interna não suportada.';
       return;
     }
 
     try {
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: 'start',
+        interval: interval,
+        multiplier: multiplier
+      });
+      if (response && response.buttonFound === false) {
+        statusDiv.innerText = 'Botão #bigCookie não encontrado. Ele pode aparecer depois?';
+      } else {
+        statusDiv.innerText = 'Auto clicker ATIVO (passe o mouse sobre o botão)';
+      }
+    } catch (error) {
+      // Injeta o content script se necessário
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        });
+        const response = await chrome.tabs.sendMessage(tab.id, {
+          action: 'start',
+          interval: interval,
+          multiplier: multiplier
+        });
+        if (response && response.buttonFound === false) {
+          statusDiv.innerText = 'Botão #bigCookie não encontrado.';
+        } else {
+          statusDiv.innerText = 'Auto clicker ATIVO (passe o mouse sobre o botão)';
+        }
+      } catch (injectError) {
+        statusDiv.innerText = 'Erro ao iniciar. Recarregue a página e tente.';
+      }
+    }
+  });
+
+  stopBtn.addEventListener('click', async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!isAccessibleUrl(tab.url)) {
+      statusDiv.innerText = 'Erro: Página interna não suportada.';
+      return;
+    }
+    try {
       await chrome.tabs.sendMessage(tab.id, { action: 'stop' });
       statusDiv.innerText = 'Parado';
     } catch (error) {
-      statusDiv.innerText = 'Erro ao parar. Recarregue a página se necessário.';
+      statusDiv.innerText = 'Erro ao parar.';
     }
   });
 });
