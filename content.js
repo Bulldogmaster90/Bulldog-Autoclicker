@@ -1,62 +1,132 @@
 let clickIntervalId = null;
 let currentInterval = 1000;
-let mouseX = window.innerWidth / 2;
-let mouseY = window.innerHeight / 2;
+let currentMultiplier = 1;
+let targetButton = null;
+let isActive = false;
+let isMouseOver = false;
 
-console.log('✅ Content script do Auto Clicker carregado');
+function findButton() {
+  return document.getElementById('bigCookie');
+}
 
-// Atualiza coordenadas do mouse
-document.addEventListener('mousemove', (event) => {
-  mouseX = event.clientX;
-  mouseY = event.clientY;
-});
-
-// Simula um clique
-function simulateClick() {
-  console.log(`🖱️ Tentando clicar em (${mouseX}, ${mouseY})`);
-  const element = document.elementFromPoint(mouseX, mouseY);
-  if (element) {
-    console.log(`🎯 Elemento: ${element.tagName}${element.id ? '#' + element.id : ''}${element.className ? '.' + element.className : ''}`);
-    // Dispara eventos completos
-    const clickEvent = new MouseEvent('click', {
-      view: window,
-      bubbles: true,
-      cancelable: true,
-      clientX: mouseX,
-      clientY: mouseY
-    });
-    element.dispatchEvent(clickEvent);
-    // Fallback: chama o método click() nativo
-    element.click();
-  } else {
-    console.warn('⚠️ Nenhum elemento encontrado na posição');
+function clickButton() {
+  if (targetButton && targetButton.isConnected) {
+    // Dispara os cliques em sequência rápida
+    for (let i = 0; i < currentMultiplier; i++) {
+      targetButton.click();
+      // Também dispara um evento de clique para garantir
+      const event = new MouseEvent('click', {
+        view: window,
+        bubbles: true,
+        cancelable: true
+      });
+      targetButton.dispatchEvent(event);
+    }
   }
 }
 
-function startAutoClicker(intervalMs) {
-  if (clickIntervalId !== null) stopAutoClicker();
-  currentInterval = intervalMs;
-  clickIntervalId = setInterval(simulateClick, currentInterval);
-  console.log(`✅ Auto clicker iniciado com intervalo ${intervalMs}ms`);
+function startClicking() {
+  if (clickIntervalId !== null) stopClicking();
+  clickIntervalId = setInterval(clickButton, currentInterval);
 }
 
-function stopAutoClicker() {
+function stopClicking() {
   if (clickIntervalId !== null) {
     clearInterval(clickIntervalId);
     clickIntervalId = null;
-    console.log('⏹️ Auto clicker parado');
   }
 }
 
-// Listener de mensagens do popup
+function onMouseEnter() {
+  if (isActive && targetButton && targetButton.isConnected) {
+    isMouseOver = true;
+    startClicking();
+    targetButton.style.outline = '2px solid red';
+  }
+}
+
+function onMouseLeave() {
+  if (targetButton) {
+    isMouseOver = false;
+    stopClicking();
+    targetButton.style.outline = '';
+  }
+}
+
+function setupListeners(button) {
+  if (!button) return false;
+  button.removeEventListener('mouseenter', onMouseEnter);
+  button.removeEventListener('mouseleave', onMouseLeave);
+  button.addEventListener('mouseenter', onMouseEnter);
+  button.addEventListener('mouseleave', onMouseLeave);
+  return true;
+}
+
+function clearListeners(button) {
+  if (button) {
+    button.removeEventListener('mouseenter', onMouseEnter);
+    button.removeEventListener('mouseleave', onMouseLeave);
+    button.style.outline = '';
+  }
+}
+
+function activate(intervalMs, multiplier) {
+  currentInterval = intervalMs;
+  currentMultiplier = multiplier;
+  isActive = true;
+
+  targetButton = findButton();
+  if (targetButton) {
+    setupListeners(targetButton);
+    if (targetButton.matches(':hover')) {
+      isMouseOver = true;
+      startClicking();
+    }
+  } else {
+    observeForButton();
+  }
+}
+
+function deactivate() {
+  isActive = false;
+  stopClicking();
+  if (targetButton) {
+    clearListeners(targetButton);
+    targetButton = null;
+  }
+  if (window.buttonObserver) {
+    window.buttonObserver.disconnect();
+    window.buttonObserver = null;
+  }
+}
+
+function observeForButton() {
+  if (window.buttonObserver) return;
+  const observer = new MutationObserver((mutations, obs) => {
+    const button = findButton();
+    if (button && isActive) {
+      targetButton = button;
+      setupListeners(targetButton);
+      obs.disconnect();
+      window.buttonObserver = null;
+      if (targetButton.matches(':hover')) {
+        isMouseOver = true;
+        startClicking();
+      }
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  window.buttonObserver = observer;
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('📨 Mensagem recebida:', request);
   if (request.action === 'start') {
-    startAutoClicker(request.interval);
-    sendResponse({ status: 'started' });
+    activate(request.interval, request.multiplier);
+    const buttonExists = !!findButton();
+    sendResponse({ status: 'started', buttonFound: buttonExists });
   } else if (request.action === 'stop') {
-    stopAutoClicker();
+    deactivate();
     sendResponse({ status: 'stopped' });
   }
-  return true; // Necessário para sendResponse assíncrono
+  return true;
 });
