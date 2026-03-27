@@ -2,13 +2,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
   const intervalInput = document.getElementById('interval');
-  const multiplierInput = document.getElementById('multiplier');
   const statusDiv = document.getElementById('status');
 
-  // Carrega configurações salvas
-  chrome.storage.local.get(['clickInterval', 'clickMultiplier'], (data) => {
-    if (data.clickInterval) intervalInput.value = data.clickInterval;
-    if (data.clickMultiplier) multiplierInput.value = data.clickMultiplier;
+  // Carrega intervalo salvo
+  chrome.storage.local.get('clickInterval', (data) => {
+    if (data.clickInterval) {
+      intervalInput.value = data.clickInterval;
+    }
   });
 
   function isAccessibleUrl(url) {
@@ -19,19 +19,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   startBtn.addEventListener('click', async () => {
     const interval = parseInt(intervalInput.value, 10);
-    const multiplier = parseInt(multiplierInput.value, 10);
-
     if (isNaN(interval) || interval <= 0) {
-      statusDiv.innerText = 'Intervalo inválido (positivo)';
-      return;
-    }
-    if (isNaN(multiplier) || multiplier < 1) {
-      statusDiv.innerText = 'Multiplicador deve ser >= 1';
+      statusDiv.innerText = 'Intervalo inválido (deve ser positivo)';
       return;
     }
 
-    // Salva configurações
-    chrome.storage.local.set({ clickInterval: interval, clickMultiplier: multiplier });
+    chrome.storage.local.set({ clickInterval: interval });
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!isAccessibleUrl(tab.url)) {
@@ -42,8 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const response = await chrome.tabs.sendMessage(tab.id, {
         action: 'start',
-        interval: interval,
-        multiplier: multiplier
+        interval: interval
       });
       if (response && response.buttonFound === false) {
         statusDiv.innerText = 'Botão #bigCookie não encontrado. Ele pode aparecer depois?';
@@ -51,7 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
         statusDiv.innerText = 'Auto clicker ATIVO (passe o mouse sobre o botão)';
       }
     } catch (error) {
-      // Injeta o content script se necessário
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
@@ -59,8 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const response = await chrome.tabs.sendMessage(tab.id, {
           action: 'start',
-          interval: interval,
-          multiplier: multiplier
+          interval: interval
         });
         if (response && response.buttonFound === false) {
           statusDiv.innerText = 'Botão #bigCookie não encontrado.';
