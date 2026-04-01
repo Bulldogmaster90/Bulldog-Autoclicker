@@ -2,13 +2,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
   const intervalInput = document.getElementById('interval');
-  const multiplierInput = document.getElementById('multiplier');
+  const numMiceInput = document.getElementById('numMice');
   const statusDiv = document.getElementById('status');
 
   // Carrega configurações salvas
-  chrome.storage.local.get(['clickInterval', 'clickMultiplier'], (data) => {
+  chrome.storage.local.get(['clickInterval', 'clickNumMice'], (data) => {
     if (data.clickInterval) intervalInput.value = data.clickInterval;
-    if (data.clickMultiplier) multiplierInput.value = data.clickMultiplier;
+    if (data.clickNumMice) numMiceInput.value = data.clickNumMice;
   });
 
   function isAccessibleUrl(url) {
@@ -19,19 +19,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   startBtn.addEventListener('click', async () => {
     const interval = parseInt(intervalInput.value, 10);
-    const multiplier = parseInt(multiplierInput.value, 10);
+    const numMice = parseInt(numMiceInput.value, 10);
 
     if (isNaN(interval) || interval <= 0) {
       statusDiv.innerText = 'Intervalo inválido (positivo)';
       return;
     }
-    if (isNaN(multiplier) || multiplier < 1 || multiplier > 100) {
-      statusDiv.innerText = 'Multiplicador deve estar entre 1 e 100';
+    if (isNaN(numMice) || numMice < 1 || numMice > 50) {
+      statusDiv.innerText = 'Número de mouses deve estar entre 1 e 50';
       return;
     }
 
     // Salva configurações
-    chrome.storage.local.set({ clickInterval: interval, clickMultiplier: multiplier });
+    chrome.storage.local.set({ clickInterval: interval, clickNumMice: numMice });
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!isAccessibleUrl(tab.url)) {
@@ -43,12 +43,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const response = await chrome.tabs.sendMessage(tab.id, {
         action: 'start',
         interval: interval,
-        multiplier: multiplier
+        numMice: numMice
       });
       if (response && response.buttonFound === false) {
         statusDiv.innerText = 'Botão #bigCookie não encontrado. Ele pode aparecer depois?';
       } else {
-        statusDiv.innerText = `Auto clicker ATIVO (${multiplier} cliques a cada ${interval}ms) - Passe o mouse sobre o botão`;
+        statusDiv.innerText = `${numMice} mouse(s) ativo(s) (clique a cada ${interval}ms) - Passe o mouse sobre o botão`;
       }
     } catch (error) {
       // Injeta o content script se necessário
@@ -60,12 +60,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await chrome.tabs.sendMessage(tab.id, {
           action: 'start',
           interval: interval,
-          multiplier: multiplier
+          numMice: numMice
         });
         if (response && response.buttonFound === false) {
           statusDiv.innerText = 'Botão #bigCookie não encontrado.';
         } else {
-          statusDiv.innerText = `Auto clicker ATIVO (${multiplier} cliques a cada ${interval}ms) - Passe o mouse sobre o botão`;
+          statusDiv.innerText = `${numMice} mouse(s) ativo(s) (clique a cada ${interval}ms) - Passe o mouse sobre o botão`;
         }
       } catch (injectError) {
         statusDiv.innerText = 'Erro ao iniciar. Recarregue a página e tente.';
