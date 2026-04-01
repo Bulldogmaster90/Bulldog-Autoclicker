@@ -1,6 +1,6 @@
-let clickIntervalId = null;
+let mouseIntervalIds = [];        // armazena os intervalos de cada mouse
 let currentInterval = 1000;
-let currentMultiplier = 1;
+let currentNumMice = 1;
 let targetButton = null;
 let isActive = false;
 let isMouseOver = false;
@@ -11,36 +11,38 @@ function findButton() {
 
 function clickButton() {
   if (targetButton && targetButton.isConnected) {
-    // Executa o número de cliques definido pelo multiplicador
-    for (let i = 0; i < currentMultiplier; i++) {
-      targetButton.click();
-      // Também dispara um evento de clique para garantir compatibilidade
-      const event = new MouseEvent('click', {
-        view: window,
-        bubbles: true,
-        cancelable: true
-      });
-      targetButton.dispatchEvent(event);
-    }
+    targetButton.click();
+    // Dispara um evento de clique para garantir compatibilidade
+    const event = new MouseEvent('click', {
+      view: window,
+      bubbles: true,
+      cancelable: true
+    });
+    targetButton.dispatchEvent(event);
   }
 }
 
-function startClicking() {
-  if (clickIntervalId !== null) stopClicking();
-  clickIntervalId = setInterval(clickButton, currentInterval);
+// Inicia todos os mouses (cria um setInterval para cada)
+function startAllMice() {
+  stopAllMice(); // limpa qualquer timer anterior
+  for (let i = 0; i < currentNumMice; i++) {
+    const id = setInterval(clickButton, currentInterval);
+    mouseIntervalIds.push(id);
+  }
 }
 
-function stopClicking() {
-  if (clickIntervalId !== null) {
-    clearInterval(clickIntervalId);
-    clickIntervalId = null;
+// Para todos os mouses
+function stopAllMice() {
+  for (const id of mouseIntervalIds) {
+    clearInterval(id);
   }
+  mouseIntervalIds = [];
 }
 
 function onMouseEnter() {
   if (isActive && targetButton && targetButton.isConnected) {
     isMouseOver = true;
-    startClicking();
+    startAllMice();
     targetButton.style.outline = '2px solid red';
   }
 }
@@ -48,7 +50,7 @@ function onMouseEnter() {
 function onMouseLeave() {
   if (targetButton) {
     isMouseOver = false;
-    stopClicking();
+    stopAllMice();
     targetButton.style.outline = '';
   }
 }
@@ -70,9 +72,9 @@ function clearListeners(button) {
   }
 }
 
-function activate(intervalMs, multiplier) {
+function activate(intervalMs, numMice) {
   currentInterval = intervalMs;
-  currentMultiplier = multiplier;
+  currentNumMice = numMice;
   isActive = true;
 
   targetButton = findButton();
@@ -80,7 +82,7 @@ function activate(intervalMs, multiplier) {
     setupListeners(targetButton);
     if (targetButton.matches(':hover')) {
       isMouseOver = true;
-      startClicking();
+      startAllMice();
     }
   } else {
     observeForButton();
@@ -89,7 +91,7 @@ function activate(intervalMs, multiplier) {
 
 function deactivate() {
   isActive = false;
-  stopClicking();
+  stopAllMice();
   if (targetButton) {
     clearListeners(targetButton);
     targetButton = null;
@@ -111,7 +113,7 @@ function observeForButton() {
       window.buttonObserver = null;
       if (targetButton.matches(':hover')) {
         isMouseOver = true;
-        startClicking();
+        startAllMice();
       }
     }
   });
@@ -121,7 +123,7 @@ function observeForButton() {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'start') {
-    activate(request.interval, request.multiplier);
+    activate(request.interval, request.numMice);
     const buttonExists = !!findButton();
     sendResponse({ status: 'started', buttonFound: buttonExists });
   } else if (request.action === 'stop') {
