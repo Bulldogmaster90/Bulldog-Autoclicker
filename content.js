@@ -1,5 +1,6 @@
 let clickIntervalId = null;
 let currentInterval = 1000;
+let currentMultiplier = 1;
 let targetButton = null;
 let isActive = false;
 let isMouseOver = false;
@@ -10,14 +11,17 @@ function findButton() {
 
 function clickButton() {
   if (targetButton && targetButton.isConnected) {
-    targetButton.click();
-    // Dispara também um evento de clique para garantir compatibilidade
-    const event = new MouseEvent('click', {
-      view: window,
-      bubbles: true,
-      cancelable: true
-    });
-    targetButton.dispatchEvent(event);
+    // Executa o número de cliques definido pelo multiplicador
+    for (let i = 0; i < currentMultiplier; i++) {
+      targetButton.click();
+      // Também dispara um evento de clique para garantir compatibilidade
+      const event = new MouseEvent('click', {
+        view: window,
+        bubbles: true,
+        cancelable: true
+      });
+      targetButton.dispatchEvent(event);
+    }
   }
 }
 
@@ -37,7 +41,7 @@ function onMouseEnter() {
   if (isActive && targetButton && targetButton.isConnected) {
     isMouseOver = true;
     startClicking();
-    targetButton.style.outline = '2px solid red'; // indicador visual
+    targetButton.style.outline = '2px solid red';
   }
 }
 
@@ -66,8 +70,9 @@ function clearListeners(button) {
   }
 }
 
-function activate(intervalMs) {
+function activate(intervalMs, multiplier) {
   currentInterval = intervalMs;
+  currentMultiplier = multiplier;
   isActive = true;
 
   targetButton = findButton();
@@ -116,7 +121,7 @@ function observeForButton() {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'start') {
-    activate(request.interval);
+    activate(request.interval, request.multiplier);
     const buttonExists = !!findButton();
     sendResponse({ status: 'started', buttonFound: buttonExists });
   } else if (request.action === 'stop') {
