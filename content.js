@@ -1,9 +1,9 @@
 let mouseIntervalIds = [];        // armazena os intervalos de cada mouse
-let currentInterval = 1000;
+let currentInterval = 1;
 let currentNumMice = 1;
 let targetButton = null;
 let isActive = false;
-let isMouseOver = false;
+let isMouseOver = true;
 
 function findButton() {
   return document.getElementById('bigCookie');
